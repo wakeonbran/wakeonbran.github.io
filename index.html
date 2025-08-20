@@ -1,1 +1,146 @@
-<h1>this is a test</h1>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Simple Chat Board</title>
+  <style>
+    :root { --bg:#0f172a; --card:#111827; --muted:#94a3b8; --text:#e5e7eb; --accent:#22c55e; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; background:var(--bg); color:var(--text); display:flex; min-height:100dvh; }
+    .wrap { max-width: 760px; margin: 0 auto; width: 100%; padding: 16px; display:flex; flex-direction:column; gap: 12px; }
+    header { display:flex; justify-content:space-between; align-items:center; }
+    header h1 { margin:0; font-size: 20px; }
+    header small { color: var(--muted); }
+    .card { background: var(--card); border: 1px solid #1f2937; border-radius: 14px; box-shadow: 0 8px 24px rgba(0,0,0,.25); }
+    form { display: grid; grid-template-columns: 1fr; gap: 10px; padding: 12px; }
+    label { font-size: 12px; color: var(--muted); }
+    input, textarea { width: 100%; padding: 10px 12px; border-radius: 10px; border:1px solid #374151; background:#0b1220; color: var(--text); }
+    textarea { resize: vertical; min-height: 70px; }
+    .row { display:grid; grid-template-columns: 1fr 120px; gap: 10px; }
+    button { cursor:pointer; padding: 10px 12px; border-radius: 10px; border:1px solid #14532d; background: var(--accent); color:#0b1220; font-weight: 700; }
+    button.secondary { background: transparent; color: var(--muted); border:1px solid #374151; }
+    #messages { padding: 8px; display:flex; flex-direction:column; gap: 8px; height: 55vh; overflow:auto; scroll-behavior: smooth; }
+    .msg { padding: 10px; border-radius: 12px; border:1px solid #1f2937; background: #0b1220; }
+    .meta { display:flex; gap:8px; align-items:center; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+    .name { font-weight: 700; color: #c7d2fe; }
+    .time { opacity:.8; }
+    footer { display:flex; gap:8px; justify-content:flex-end; padding: 8px 0 0; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Simple Chat Board</h1>
+      <small>LocalStorage • No backend</small>
+    </header>
+
+    <section class="card" aria-label="Post a message">
+      <form id="chatForm">
+        <div>
+          <label for="name">Name</label>
+          <input id="name" name="name" placeholder="e.g., Alex" required />
+        </div>
+        <div>
+          <label for="message">Message</label>
+          <textarea id="message" name="message" maxlength="500" placeholder="Say something nice…" required></textarea>
+        </div>
+        <div class="row">
+          <button type="submit">Post</button>
+          <button class="secondary" type="button" id="clear">Clear All</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="card" aria-label="Messages">
+      <div id="messages" role="feed" aria-live="polite" aria-busy="false"></div>
+      <footer>
+        <small id="counter">0 message(s)</small>
+      </footer>
+    </section>
+  </div>
+
+  <script>
+    // A super tiny localStorage-powered chat board (no server)
+    const KEY = 'simple-chat-board:v1';
+    const $ = sel => document.querySelector(sel);
+    const messagesEl = $('#messages');
+    const counterEl = $('#counter');
+    const nameEl = $('#name');
+    const msgEl = $('#message');
+
+    const getRoom = () => new URLSearchParams(location.search).get('room') || 'default';
+    const storageKey = () => `${KEY}:${getRoom()}`;
+
+    function loadMessages(){
+      try {
+        const raw = localStorage.getItem(storageKey());
+        return raw ? JSON.parse(raw) : [];
+      } catch { return []; }
+    }
+    function saveMessages(list){
+      localStorage.setItem(storageKey(), JSON.stringify(list));
+    }
+
+    function escape(text){
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function render(){
+      const list = loadMessages();
+      messagesEl.innerHTML = '';
+      list.forEach(item => {
+        const el = document.createElement('article');
+        el.className = 'msg';
+        el.innerHTML = `
+          <div class="meta">
+            <span class="name">${escape(item.name || 'Anon')}</span>
+            <span class="time">• ${new Date(item.time).toLocaleString()}</span>
+          </div>
+          <div class="text">${escape(item.text)}</div>
+        `;
+        messagesEl.appendChild(el);
+      });
+      counterEl.textContent = `${list.length} message(s)`;
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    // Pre-fill name from localStorage (per-device nicety)
+    const NAME_KEY = KEY + ':name';
+    nameEl.value = localStorage.getItem(NAME_KEY) || '';
+
+    $('#chatForm').addEventListener('submit', (e)=>{
+      e.preventDefault();
+      const name = nameEl.value.trim() || 'Anon';
+      const text = msgEl.value.trim();
+      if(!text) return;
+      localStorage.setItem(NAME_KEY, name);
+      const list = loadMessages();
+      list.push({ name, text, time: Date.now() });
+      saveMessages(list);
+      msgEl.value = '';
+      render();
+    });
+
+    $('#clear').addEventListener('click', ()=>{
+      if(confirm('Clear all messages on this device for this room?')){
+        saveMessages([]);
+        render();
+      }
+    });
+
+    // Basic cross-tab sync so multiple tabs update
+    window.addEventListener('storage', (ev)=>{
+      if(ev.key === storageKey()) render();
+    });
+
+    // Minimal auto-refresh each 2s in case other tabs write
+    setInterval(render, 2000);
+
+    // Initial render
+    render();
+  </script>
+</body>
+</html>
